@@ -13,34 +13,38 @@
  *      See the License for the specific language governing permissions and
  *      limitations under the License.
  */
-package com.netflix.zuul.filters;
 
+package com.netflix.zuul.sample.filters;
+
+import com.netflix.zuul.Filter;
+import com.netflix.zuul.filters.http.HttpInboundSyncFilter;
 import com.netflix.zuul.message.http.HttpRequestMessage;
 
 /**
- * User: michaels@netflix.com
- * Date: 5/15/15
- * Time: 10:54 AM
+ * Determine if requests need to be debugged.
+ *
+ * In order to test this, set query parameter "debugRequest=true"
+ *
+ * Author: Arthur Gonigberg
+ * Date: December 22, 2017
  */
-public class TestSyncFilter extends BaseSyncFilter<HttpRequestMessage, HttpRequestMessage>
-{
-    @Override
-    public HttpRequestMessage apply(HttpRequestMessage input) {
-        return input;
-    }
-
+@Filter(order = 20)
+public class Debug extends HttpInboundSyncFilter {
     @Override
     public int filterOrder() {
-        return 0;
+        return 20;
     }
 
     @Override
-    public FilterType filterType() {
-        return FilterType.INBOUND;
+    public boolean shouldFilter(HttpRequestMessage request) {
+        return "true".equalsIgnoreCase(request.getQueryParams().getFirst("debugRequest"));
     }
 
     @Override
-    public boolean shouldFilter(HttpRequestMessage msg) {
-        return true;
+    public HttpRequestMessage apply(HttpRequestMessage request) {
+        request.getContext().setDebugRequest(true);
+        request.getContext().setDebugRouting(true);
+
+        return request;
     }
 }
