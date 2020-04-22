@@ -1,7 +1,7 @@
 
 plugins {
-    id 'nebula.netflixoss' version '8.0.0'
-    id 'nebula.dependency-lock' version '8.0.0'
+    id 'nebula.netflixoss' version '8.8.1'
+    id 'nebula.dependency-lock' version '9.0.0'
     id "com.google.osdetector" version "1.6.2"
     id "me.champeau.gradle.jmh" version "0.5.0"
 }
@@ -35,7 +35,13 @@ subprojects {
 
     license {
         ignoreFailures = false
-        exclude "META-INF/services/*"
+        excludes([
+                "**/META-INF/services/javax.annotation.processing.Processor",
+                "**/META-INF/gradle/incremental.annotation.processors",
+                "**/*.cert",
+                "**/*.jks",
+                "**/*.key",
+        ])
     }
 
     group = "com.netflix.${githubProjectName}"
@@ -51,30 +57,19 @@ subprojects {
 
     tasks.withType(Javadoc).each {
         it.classpath = sourceSets.main.compileClasspath
+        // Ignore Javadoc warnings for now, re-enable after Zuul 3.
+        it.options.addStringOption('Xdoclint:none', '-quiet')
     }
+
     ext {
         libraries = [
-                guava: "com.google.guava:guava:28.1-jre",
+                guava: "com.google.guava:guava:29.0-jre",
                 junit: "junit:junit:4.13",
-                mockito: 'org.mockito:mockito-core:1.10.19',
+                mockito: 'org.mockito:mockito-core:3.+',
                 slf4j: "org.slf4j:slf4j-api:1.7.25",
                 truth: 'com.google.truth:truth:1.0.1'
         ]
     }
-
-
-    dependencies {
-        ext.versions_guice = "4.2.2"
-
-        // Use guice-4 while debugging a startup error that is hidden by guice-3's lack of java8 lambda support.
-        compile(group: 'com.google.inject', name: 'guice', version: "${versions_guice}")
-        compile(group: 'com.google.inject.extensions', name: 'guice-multibindings', version: "${versions_guice}")
-        compile(group: 'com.google.inject.extensions', name: 'guice-grapher', version: "${versions_guice}")
-        compile(group: 'com.google.inject.extensions', name: 'guice-assistedinject', version: "${versions_guice}")
-        compile(group: 'com.google.inject.extensions', name: 'guice-servlet', version: "${versions_guice}")
-        compile(group: 'com.google.inject.extensions', name: 'guice-throwingproviders', version: "${versions_guice}")
-    }
-
 
     test {
         testLogging {

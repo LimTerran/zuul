@@ -16,17 +16,16 @@
 
 package com.netflix.zuul.init;
 
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
+
 import com.netflix.zuul.init2.TestZuulFilter2;
 import org.apache.commons.configuration.AbstractConfiguration;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
-
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.when;
+import org.mockito.Mockito;
+import org.mockito.junit.MockitoJUnitRunner;
 
 @RunWith(MockitoJUnitRunner.class)
 public class ZuulFiltersModuleTest {
@@ -34,11 +33,12 @@ public class ZuulFiltersModuleTest {
     @Mock
     AbstractConfiguration configuration;
 
-    ZuulFiltersModule module = new ZuulFiltersModule();
+    private final ZuulFiltersModule module = new ZuulFiltersModule();
 
     @Test
     public void testDefaultFilterLocations() {
-        when(configuration.getStringArray(eq("zuul.filters.locations"))).thenReturn("inbound,outbound,endpoint".split(","));
+        Mockito.when(configuration.getStringArray("zuul.filters.locations"))
+                .thenReturn("inbound,outbound,endpoint".split(","));
 
         String[] filterLocations = module.findFilterLocations(configuration);
 
@@ -48,7 +48,7 @@ public class ZuulFiltersModuleTest {
 
     @Test
     public void testEmptyFilterLocations() {
-        when(configuration.getStringArray(eq("zuul.filters.locations"))).thenReturn(new String[0]);
+        Mockito.when(configuration.getStringArray("zuul.filters.locations")).thenReturn(new String[0]);
 
         String[] filterLocations = module.findFilterLocations(configuration);
 
@@ -57,8 +57,8 @@ public class ZuulFiltersModuleTest {
 
     @Test
     public void testEmptyClassNames() {
-        when(configuration.getStringArray(eq("zuul.filters.classes"))).thenReturn(new String[]{});
-        when(configuration.getStringArray(eq("zuul.filters.packages"))).thenReturn(new String[]{});
+        Mockito.when(configuration.getStringArray("zuul.filters.classes")).thenReturn(new String[]{});
+        Mockito.when(configuration.getStringArray("zuul.filters.packages")).thenReturn(new String[]{});
 
         String[] classNames = module.findClassNames(configuration);
 
@@ -68,10 +68,11 @@ public class ZuulFiltersModuleTest {
     @Test
     public void testClassNamesOnly() {
 
-        Class expectedClass = TestZuulFilter.class;
+        Class<?> expectedClass = TestZuulFilter.class;
 
-        when(configuration.getStringArray(eq("zuul.filters.classes"))).thenReturn(new String[]{"com.netflix.zuul.init.TestZuulFilter"});
-        when(configuration.getStringArray(eq("zuul.filters.packages"))).thenReturn(new String[]{});
+        Mockito.when(configuration.getStringArray("zuul.filters.classes"))
+                .thenReturn(new String[]{"com.netflix.zuul.init.TestZuulFilter"});
+        Mockito.when(configuration.getStringArray("zuul.filters.packages")).thenReturn(new String[]{});
 
         String[] classNames = module.findClassNames(configuration);
 
@@ -83,10 +84,11 @@ public class ZuulFiltersModuleTest {
     @Test
     public void testClassNamesPackagesOnly() {
 
-        Class expectedClass = TestZuulFilter.class;
+        Class<?> expectedClass = TestZuulFilter.class;
 
-        when(configuration.getStringArray(eq("zuul.filters.classes"))).thenReturn(new String[]{});
-        when(configuration.getStringArray(eq("zuul.filters.packages"))).thenReturn(new String[]{"com.netflix.zuul.init"});
+        Mockito.when(configuration.getStringArray("zuul.filters.classes")).thenReturn(new String[]{});
+        Mockito.when(configuration.getStringArray("zuul.filters.packages"))
+                .thenReturn(new String[]{"com.netflix.zuul.init"});
 
         String[] classNames = module.findClassNames(configuration);
 
@@ -97,11 +99,13 @@ public class ZuulFiltersModuleTest {
 
     @Test
     public void testMultiClasses() {
-        Class expectedClass1 = TestZuulFilter.class;
-        Class expectedClass2 = TestZuulFilter2.class;
+        Class<?> expectedClass1 = TestZuulFilter.class;
+        Class<?> expectedClass2 = TestZuulFilter2.class;
 
-        when(configuration.getStringArray(eq("zuul.filters.classes"))).thenReturn(new String[]{"com.netflix.zuul.init.TestZuulFilter", "com.netflix.zuul.init2.TestZuulFilter2"});
-        when(configuration.getStringArray(eq("zuul.filters.packages"))).thenReturn(new String[0]);
+        Mockito.when(configuration.getStringArray("zuul.filters.classes"))
+                .thenReturn(new String[] {
+                        "com.netflix.zuul.init.TestZuulFilter", "com.netflix.zuul.init2.TestZuulFilter2"});
+        Mockito.when(configuration.getStringArray("zuul.filters.packages")).thenReturn(new String[0]);
 
         String[] classNames = module.findClassNames(configuration);
 
@@ -112,11 +116,12 @@ public class ZuulFiltersModuleTest {
 
     @Test
     public void testMultiPackages() {
-        Class expectedClass1 = TestZuulFilter.class;
-        Class expectedClass2 = TestZuulFilter2.class;
+        Class<?> expectedClass1 = TestZuulFilter.class;
+        Class<?> expectedClass2 = TestZuulFilter2.class;
 
-        when(configuration.getStringArray(eq("zuul.filters.classes"))).thenReturn(new String[0]);
-        when(configuration.getStringArray(eq("zuul.filters.packages"))).thenReturn(new String[]{"com.netflix.zuul.init", "com.netflix.zuul.init2"});
+        Mockito.when(configuration.getStringArray("zuul.filters.classes")).thenReturn(new String[0]);
+        Mockito.when(configuration.getStringArray("zuul.filters.packages"))
+                .thenReturn(new String[]{"com.netflix.zuul.init", "com.netflix.zuul.init2"});
 
         String[] classNames = module.findClassNames(configuration);
 

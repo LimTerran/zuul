@@ -47,13 +47,11 @@ import io.netty.util.DomainNameMapping;
 import io.netty.util.concurrent.GlobalEventExecutor;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.util.Map;
 import javax.annotation.Nullable;
+import javax.inject.Inject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import javax.annotation.PostConstruct;
-import javax.inject.Inject;
-import java.util.Map;
 
 public abstract class BaseServerStartup
 {
@@ -102,7 +100,7 @@ public abstract class BaseServerStartup
         return server;
     }
 
-    @PostConstruct
+    @Inject
     public void init() throws Exception
     {
         ChannelGroup clientChannels = new DefaultChannelGroup(GlobalEventExecutor.INSTANCE);
@@ -173,11 +171,6 @@ public abstract class BaseServerStartup
      * First looks for a property specific to the named listen address of the form -
      * "server.${addrName}.${propertySuffix}". If none found, then looks for a server-wide property of the form -
      * "server.${propertySuffix}".  If that is also not found, then returns the specified default value.
-     *
-     * @param listenAddressName
-     * @param propertySuffix
-     * @param defaultValue
-     * @return
      */
     public static int chooseIntChannelProperty(String listenAddressName, String propertySuffix, int defaultValue) {
         String globalPropertyName = "server." + propertySuffix;
