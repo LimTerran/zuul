@@ -30,9 +30,7 @@ import com.netflix.netty.common.metrics.EventLoopGroupMetrics;
 import com.netflix.netty.common.proxyprotocol.StripUntrustedProxyHeadersHandler;
 import com.netflix.netty.common.ssl.ServerSslConfig;
 import com.netflix.netty.common.status.ServerStatusManager;
-import com.netflix.servo.DefaultMonitorRegistry;
-import com.netflix.servo.monitor.BasicCounter;
-import com.netflix.servo.monitor.MonitorConfig;
+import com.netflix.spectator.api.Counter;
 import com.netflix.spectator.api.Registry;
 import com.netflix.zuul.FilterLoader;
 import com.netflix.zuul.FilterUsageNotifier;
@@ -43,7 +41,7 @@ import io.netty.channel.ChannelInitializer;
 import io.netty.channel.group.ChannelGroup;
 import io.netty.channel.group.DefaultChannelGroup;
 import io.netty.handler.ssl.SslContext;
-import io.netty.util.DomainNameMapping;
+import io.netty.util.AsyncMapping;
 import io.netty.util.concurrent.GlobalEventExecutor;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
@@ -154,8 +152,7 @@ public abstract class BaseServerStartup
 
         channelDeps.set(ZuulDependencyKeys.sessionCtxDecorator, sessionCtxDecorator);
         channelDeps.set(ZuulDependencyKeys.requestCompleteHandler, reqCompleteHandler);
-        final BasicCounter httpRequestReadTimeoutCounter =  new BasicCounter(MonitorConfig.builder("server.http.request.read.timeout").build());
-        DefaultMonitorRegistry.getInstance().register(httpRequestReadTimeoutCounter);
+        final Counter httpRequestReadTimeoutCounter = registry.counter("server.http.request.read.timeout");
         channelDeps.set(ZuulDependencyKeys.httpRequestReadTimeoutCounter, httpRequestReadTimeoutCounter);
         channelDeps.set(ZuulDependencyKeys.filterLoader, filterLoader);
         channelDeps.set(ZuulDependencyKeys.filterUsageNotifier, usageNotifier);
@@ -294,10 +291,10 @@ public abstract class BaseServerStartup
 
     // TODO(carl-mastrangelo): remove this after 2.1.7
     /**
-     * Use {@link #logAddrConfigured(SocketAddress, DomainNameMapping)} instead.
+     * Use {@link #logAddrConfigured(SocketAddress, AsyncMapping)} instead.
      */
     @Deprecated
-    protected void logPortConfigured(int port, DomainNameMapping<SslContext> sniMapping) {
+    protected void logPortConfigured(int port, AsyncMapping<String, SslContext> sniMapping) {
         logAddrConfigured(new InetSocketAddress(port), sniMapping);
     }
 
@@ -313,11 +310,16 @@ public abstract class BaseServerStartup
         LOG.info(msg);
     }
 
-    protected final void logAddrConfigured(SocketAddress socketAddress, @Nullable DomainNameMapping<?> sniMapping) {
+    protected final void logAddrConfigured(
+            SocketAddress socketAddress, @Nullable AsyncMapping<String, SslContext> sniMapping) {
         String msg = "Configured address: " + socketAddress;
         if (sniMapping != null) {
-            msg = msg + " with SNI config: " + sniMapping.asMap();
+            msg = msg + " with SNI config: " + sniMapping;
         }
         LOG.info(msg);
+    }
+
+    protected final void logSecureAddrConfigured(SocketAddress socketAddress, @Nullable Object securityConfig) {
+        LOG.info("Configured address: {} with security config {}", socketAddress, securityConfig);
     }
 }
