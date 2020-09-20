@@ -23,9 +23,16 @@ import com.netflix.netty.common.CategorizedThreadFactory;
 import com.netflix.netty.common.LeastConnsEventLoopChooserFactory;
 import com.netflix.netty.common.metrics.EventLoopGroupMetrics;
 import com.netflix.netty.common.status.ServerStatusManager;
+import com.netflix.spectator.api.Registry;
+import com.netflix.spectator.api.Spectator;
+import com.netflix.zuul.Attrs;
+import com.netflix.zuul.monitoring.ConnTimer;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelHandler.Sharable;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.DefaultSelectStrategyFactory;
@@ -43,12 +50,14 @@ import io.netty.channel.kqueue.KQueueSocketChannel;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.util.AttributeKey;
 import io.netty.util.concurrent.DefaultEventExecutorChooserFactory;
 import io.netty.util.concurrent.EventExecutor;
 import io.netty.util.concurrent.EventExecutorChooserFactory;
 import io.netty.util.concurrent.ThreadPerTaskExecutor;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
@@ -105,6 +114,7 @@ public class Server
     private final EventLoopGroupMetrics eventLoopGroupMetrics;
 
     private final Thread jvmShutdownHook = new Thread(this::stop, "Zuul-JVM-shutdown-hook");
+    private final Registry registry;
     private ServerGroup serverGroup;
     private final ClientConnectionsShutdown clientConnectionsShutdown;
     private final ServerStatusManager serverStatusManager;
@@ -119,7 +129,8 @@ public class Server
     public static final AtomicReference<Class<? extends Channel>> defaultOutboundChannelType = new AtomicReference<>();
 
     /**
-     * Use {@link #Server(ServerStatusManager, Map, ClientConnectionsShutdown, EventLoopGroupMetrics, EventLoopConfig)}
+     * Use {@link #Server(Registry, ServerStatusManager, Map, ClientConnectionsShutdown, EventLoopGroupMetrics,
+     * EventLoopConfig)}
      * instead.
      */
     @Deprecated
@@ -131,7 +142,8 @@ public class Server
     }
 
     /**
-     * Use {@link #Server(ServerStatusManager, Map, ClientConnectionsShutdown, EventLoopGroupMetrics, EventLoopConfig)}
+     * Use {@link #Server(Registry, ServerStatusManager, Map, ClientConnectionsShutdown, EventLoopGroupMetrics,
+     * EventLoopConfig)}
      * instead.
      */
     @SuppressWarnings("unchecked") // Channel init map has the wrong generics and we can't fix without api breakage.
@@ -139,15 +151,16 @@ public class Server
     public Server(Map<Integer, ChannelInitializer> portsToChannelInitializers, ServerStatusManager serverStatusManager,
                   ClientConnectionsShutdown clientConnectionsShutdown, EventLoopGroupMetrics eventLoopGroupMetrics,
                   EventLoopConfig eventLoopConfig) {
-        this(serverStatusManager,
+        this(Spectator.globalRegistry(), serverStatusManager,
                 convertPortMap((Map<Integer, ChannelInitializer<?>>) (Map) portsToChannelInitializers),
                 clientConnectionsShutdown, eventLoopGroupMetrics, eventLoopConfig);
     }
 
-    public Server(ServerStatusManager serverStatusManager,
+    public Server(Registry registry, ServerStatusManager serverStatusManager,
            Map<? extends SocketAddress, ? extends ChannelInitializer<?>> addressesToInitializers,
            ClientConnectionsShutdown clientConnectionsShutdown, EventLoopGroupMetrics eventLoopGroupMetrics,
            EventLoopConfig eventLoopConfig) {
+        this.registry = Objects.requireNonNull(registry);
         this.addressesToInitializers = Collections.unmodifiableMap(new LinkedHashMap<>(addressesToInitializers));
         this.serverStatusManager = checkNotNull(serverStatusManager, "serverStatusManager");
         this.clientConnectionsShutdown = checkNotNull(clientConnectionsShutdown, "clientConnectionsShutdown");
@@ -155,8 +168,7 @@ public class Server
         this.eventLoopGroupMetrics = checkNotNull(eventLoopGroupMetrics, "eventLoopGroupMetrics");
     }
 
-    public void stop()
-    {
+    public void stop() {
         LOG.info("Shutting down Zuul.");
         serverGroup.stop();
 
@@ -248,6 +260,7 @@ public class Server
             serverBootstrap = serverBootstrap.option(optionEntry.getKey(), optionEntry.getValue());
         }
 
+        serverBootstrap.handler(new NewConnHandler());
         serverBootstrap.childHandler(channelInitializer);
         serverBootstrap.validate();
 
@@ -434,6 +447,24 @@ public class Server
 
             stopped = true;
             LOG.info("Done shutting down");
+        }
+    }
+
+    /**
+     * Keys should be a short string usable in metrics.
+     */
+    public static final AttributeKey<Attrs> CONN_DIMENSIONS = AttributeKey.newInstance("zuulconndimensions");
+
+    private final class NewConnHandler extends ChannelInboundHandlerAdapter {
+
+        @Override
+        public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+            Long now = System.nanoTime();
+            final Channel child = (Channel) msg;
+            child.attr(CONN_DIMENSIONS).set(Attrs.newInstance());
+            ConnTimer timer = ConnTimer.install(child, registry, registry.createId("zuul.conn.client.timing"));
+            timer.record(now, "ACCEPT");
+            super.channelRead(ctx, msg);
         }
     }
 
