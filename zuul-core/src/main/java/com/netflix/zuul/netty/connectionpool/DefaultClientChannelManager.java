@@ -326,7 +326,7 @@ public class DefaultClientChannelManager implements ClientChannelManager {
             @Nullable Object key,
             CurrentPassport passport,
             AtomicReference<Server> selectedServer,
-            AtomicReference<String> selectedHostAddr) {
+            AtomicReference<? super InetAddress> selectedHostAddr) {
 
         if (shuttingDown) {
             Promise<PooledConnection> promise = eventLoop.newPromise();
@@ -342,22 +342,21 @@ public class DefaultClientChannelManager implements ClientChannelManager {
             return promise;
         }
 
-        SocketAddress finalServerAddr = pickAddress(chosenServer);
-        InstanceInfo instanceInfo = deriveInstanceInfo(chosenServer);
-
         selectedServer.set(chosenServer);
 
         // Now get the connection-pool for this server.
         IConnectionPool pool = perServerPools.computeIfAbsent(chosenServer, s -> {
+            SocketAddress finalServerAddr = pickAddress(chosenServer);
+            InstanceInfo instanceInfo = deriveInstanceInfoInternal(chosenServer);
             // Get the stats from LB for this server.
             LoadBalancerStats lbStats = loadBalancer.getLoadBalancerStats();
             ServerStats stats = lbStats.getSingleServerStat(chosenServer);
 
             final ClientChannelManager clientChannelMgr = this;
-            PooledConnectionFactory pcf = createPooledConnectionFactory(chosenServer, instanceInfo, stats, clientChannelMgr, closeConnCounter, closeWrtBusyConnCounter);
+            PooledConnectionFactory pcf = createPooledConnectionFactory(chosenServer, stats, clientChannelMgr, closeConnCounter, closeWrtBusyConnCounter);
 
             // Create a new pool for this server.
-            return createConnectionPool(chosenServer, stats, instanceInfo, finalServerAddr, clientConnFactory, pcf, connPoolConfig,
+            return createConnectionPool(stats, instanceInfo, finalServerAddr, clientConnFactory, pcf, connPoolConfig,
                     clientConfig, createNewConnCounter, createConnSucceededCounter, createConnFailedCounter,
                     requestConnCounter, reuseConnCounter, connTakenFromPoolIsNotOpen, maxConnsPerHostExceededCounter,
                     connEstablishTimer, connsInPool, connsInUse);
@@ -366,20 +365,20 @@ public class DefaultClientChannelManager implements ClientChannelManager {
         return pool.acquire(eventLoop, passport, selectedHostAddr);
     }
 
-    protected PooledConnectionFactory createPooledConnectionFactory(Server chosenServer, InstanceInfo instanceInfo, ServerStats stats, ClientChannelManager clientChannelMgr,
-                                                                    Counter closeConnCounter, Counter closeWrtBusyConnCounter) {
-        return ch -> new PooledConnection(ch, chosenServer, clientChannelMgr, instanceInfo, stats, closeConnCounter, closeWrtBusyConnCounter);
+    protected PooledConnectionFactory createPooledConnectionFactory(
+            Server chosenServer, ServerStats stats, ClientChannelManager clientChannelMgr, Counter closeConnCounter,
+            Counter closeWrtBusyConnCounter) {
+        return ch -> new PooledConnection(ch, chosenServer, clientChannelMgr, stats, closeConnCounter, closeWrtBusyConnCounter);
     }
 
     protected IConnectionPool createConnectionPool(
-            Server chosenServer, ServerStats stats, InstanceInfo instanceInfo, SocketAddress serverAddr,
+            ServerStats stats, InstanceInfo instanceInfo, SocketAddress serverAddr,
             NettyClientConnectionFactory clientConnFactory, PooledConnectionFactory pcf,
             ConnectionPoolConfig connPoolConfig, IClientConfig clientConfig, Counter createNewConnCounter,
             Counter createConnSucceededCounter, Counter createConnFailedCounter, Counter requestConnCounter,
             Counter reuseConnCounter, Counter connTakenFromPoolIsNotOpen, Counter maxConnsPerHostExceededCounter,
             PercentileTimer connEstablishTimer, AtomicInteger connsInPool, AtomicInteger connsInUse) {
         return new PerServerConnectionPool(
-                chosenServer,
                 stats,
                 instanceInfo,
                 serverAddr,
@@ -421,10 +420,6 @@ public class DefaultClientChannelManager implements ClientChannelManager {
 
     protected ConcurrentHashMap<Server, IConnectionPool> getPerServerPools() {
         return perServerPools;
-    }
-
-    protected InstanceInfo deriveInstanceInfo(Server chosenServer) {
-        return deriveInstanceInfoInternal(chosenServer);
     }
 
     @VisibleForTesting
